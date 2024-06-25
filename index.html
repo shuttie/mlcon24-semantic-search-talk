@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+	<title>Practical fine-tuning for semantic search</title>
+
+	<link rel="stylesheet" href="dist/reset.css">
+	<link rel="stylesheet" href="dist/reveal.css">
+	<link rel="stylesheet" href="dist/theme/dracula.css">
+
+	<!-- Theme used for syntax highlighted code -->
+	<link rel="stylesheet" href="plugin/highlight/monokai.css">
+</head>
+
+<body>
+	<div class="reveal">
+		<div class="slides">
+			<section>
+				<h2>Practical LLM fine-tuning</h2>
+				<img src="img/cat.png" height="350px" style="margin: 0px;">
+				<h2>for semantic search</h2>
+				<br>
+				<small>Roman Grebennikov | Delivery Hero SE | MLCon Munich 2024</small>
+			</section>
+			<section>
+				<h2>whoami</h2>
+				<p>🔎</p>
+				<ul>
+					<li>PhD in CS, quant trading, credit scoring</li>
+					<li>Findify: e-commerce search, personalization</li>
+					<li>Delivery Hero: food search, LLMs</li>
+					<li>Opensource: Metarank, Nixiesearch</li>
+				</ul>
+				<p>
+					<img src="img/dj.jpeg" height="200px">
+					<img src="img/foodora.webp" height="200px">
+				</p>
+			</section>
+			<section>
+				<h2>Nixiesearch</h2>
+				<p><img src="img/nixiesearch.png" height="300px"></p>
+				<ul>
+					<li>Open-source hybrid search engine</li>
+					<li>S3/blockstore based storage</li>
+					<li class="fragment highlight-green">Can fine-tune to your data</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Agenda</h2>
+				<p>🚀</p>
+				<ul>
+					<li class="fragment">How does this vector/semantic search work?</li>
+					<li class="fragment">Relevance, semantics and intent</li>
+					<li class="fragment">Contrastive learning</li>
+					<li class="fragment">Does this work in practice?</li>
+				</ul>
+			</section>
+	        <section>
+	            <h2>Product search in Q-Commerce</h2>
+	            <table>
+	                <tbody>
+	                <tr>
+	                    <td>
+	                        <img src="img/peya.jpg" height="400px">
+	                        <img src="img/talabat.jpg" height="400px">
+	                    </td>
+	                    <td style="vertical-align: middle;">
+	                        <ul>
+	                            <li>Large inventory: ~20M items</li>
+	                            <li>Diverse multi-token requests</li>
+	                            <li>~10% (<strong>OMG!</strong>) zero results rate</li>
+	                        </ul>
+	                        <br><br/>
+	                        <p>Multi-token, long tail queries 🔴</p>
+	                    </td>
+	                </tr>
+	                </tbody>
+	            </table>
+	        </section>
+	        <section>
+	            <h2>Precision vs Recall</h2>
+	            <p><img src="img/cola.png" height="300px"></p>
+	            <ul>
+	                <li class="fragment"><strong>coca AND cola AND zero</strong>: zero results</li>
+	                <li class="fragment"><strong>coca OR cola OR zero</strong>: matches pepsi</li>
+	                <li class="fragment"><strong>coca AND cola AND (zero OR light)</strong>: good luck</li>
+	            </ul>
+	        </section>
+			<section>
+				<h2>Lexical search</h2>
+				<p><img src="img/lexical.png" height="400px"></p>
+				<ul>
+					<li><strong>Pros</strong>: fast, many implementations</li>
+					<li><strong>Cons</strong>: lacks query understanding</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Lexical: sparse retrieval</h2>
+				<p><img src="img/lexical-sparse.png" height="400px"></p>
+				<ul>
+					<li>Bag-of-words sparse vectors: high dimentionality</li>
+				</ul>
+			</section>
+	        <section>
+	            <h2>yay semantic search!</h2>
+	            <p><img src="img/hype.jpg" height="300px"></p>
+	            <ul>
+	                <li>Embed documents with SBERT/OpenAI</li>
+	                <li>Install a Vector© Search® Database™ 🚀</li>
+	                <li>...</li>
+	                <li>PROFIT</li>
+	            </ul>
+	        </section>
+
+			<section>
+				<h2><strong>Vectors</strong> in vector search</h2>
+				<img src="img/embeddings.png" height="400px">
+				<ul>
+					<li>Embedding: text -> float[] mapping</li>
+				</ul>
+			</section>
+			<section>
+				<h2>BERT embeddings</h2>
+				<img src="img/bert.png" height="400px">
+				<ul>
+					<li>Great for masked token prediction</li>
+					<li>Not so great for search. Why?</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Embedding models for search</h2>
+				<img src="img/mteb.png" height="400px">
+				<ul>
+					<li><strong>MTEB leaderboard</strong>: model eval over 8 tasks</li>
+					<li><strong>MTEB retrieval</strong>: search over BEIR dataset collection</li>
+				</ul>
+			</section>
+			<section>
+				<h2>BEIR benchmark</h2>
+				<img src="img/beir.webp">
+				<ul>
+					<li>14 datasets, query+positive tuples</li>
+					<li>zero-shot: at least in theory</li>
+				</ul>
+			</section>
+			<section>
+				<h2><strong>Search</strong> in vector search</h2>
+				<img src="img/similarity.png" height="400px">
+				<ul>
+					<li>Similar query-document pairs have <strong>high similarity score</strong></li>
+					<li>Similarity score: <strong>cosine</strong> or dot-product</li>
+				</ul>
+			</section>
+			<section>
+				<h2><strong>Search</strong> in vector search</h2>
+				<img src="img/similarity.png" height="400px">
+				<p><strong>Main perk</strong>: all documents can be embedded offline</p>
+			</section>
+			<section>
+				<h2>Exact vs approximate search</h2>
+				<br>
+				<p>What if you have 1M products? 🤔</p>
+				<ul>
+					<li>Exact: cosine between query and 1M products</li>
+					<li>Approx: HNSW, DiskANN - not exact but fast</li>
+				</ul>
+				<br>
+				<p><img src="img/engines.png" height="200px"></p>
+			</section>
+			<section>
+				<p>OK you have embedding and vector search</p>
+				<h1>now what?</h1>
+			</section>
+			<section>
+				<h2>Semantics and intent</h2>
+				<img src="img/tomato-e5.png" height="500px" style="margin: 0px;">
+				<p>"tomato" query: what is relevant?</p>
+			</section>
+			<section>
+				<h2>Semantics and intent</h2>
+				<img src="img/tomato-e5-cvr.png" height="500px" style="margin: 0px;">
+				<p>Not all tomatos are equal!</p>
+			</section>
+	        <section>
+	            <p><img src="img/mistake.png" height="400px"></p>
+	            <ul>
+	                <li><strong>Relevance is subjective</strong>: depends on intent</li>
+	                <li><strong>Embedding model</strong>: no idea about your audience</li>
+	            </ul>
+	        </section>
+
+			<section>
+				<h2>Relevance depends on intent?</h2>
+				<br>
+				<p>Off-the-shelf <strong>zero-shot</strong> embeddings:</p>
+				<ul>
+					<li>🚀 Great at generalizability: works okey with any data </li>
+					<li>💔 Have no idea about intent of your customers </li>
+				</ul>
+			</section>
+			<section>
+				<h2>Do we need to stay <strong>zero-shot</strong>?</h2>
+				<ul>
+					<li>80% of queries are repeated</li>
+					<li>document corpus is mostly the same</li>
+				</ul>
+				<p><img src="img/tomato-e5-cvr.png" height="300px"></p>
+			</section>
+			<section>
+				<h2>Fine-tuning</h2>
+				<p><img src="img/tune.png" height="400px"></p>
+				<ul>
+					<li>Relevant docs: make them closer to query</li>
+					<li>Irrelevant docs: make them further from query</li>
+				</ul>
+			</section>
+			<section>
+				<h2>What is positive and negative?</h2>
+				<p><img src="img/cvr-noise.png" height="400px"></p>
+				<ul>
+					<li>1 click, 3 impressions = 33% CTR?</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Mixing clicks and confidence</h2>
+				<p><img src="img/bayes-cvr.png"></p>
+				<ul>
+					<li><strong>Bayes correction</strong>: mix prior and posterior</li>
+					<li><strong>Low confidence</strong>: strong shift to avg</li>
+					<li><strong>High confidence</strong>: almost no shift to avg</li>
+				</ul>
+				<p><small>[1]: Haystack US22: R.Kriegler, <a
+							href="https://www.youtube.com/watch?v=wa88XShl7hs">Modelling implicit user feedback for
+							optimising
+							e-commerce search</a></small></p>
+			</section>
+			<section>
+				<h2>Bayes corrected CVR as label</h2>
+				<p><img src="img/cvr-noise-bayes.png" height="550px"></p>
+			</section>
+			<section>
+				<h2>Bayes corrected CVR as label</h2>
+				<p><img src="img/cvr-noise-bayes2.png" height="550px"></p>
+			</section>
+			<section>
+				<h2>Training: SBERT</h2>
+				<img src="img/sbert.png" height="500px">
+			</section>
+			<section>
+				<h2>Example code</h2>
+				<img src="img/sbert-example.png" height="500px">
+			</section>
+			<section>
+				<h2>Data preparation</h2>
+				<img src="img/dataprep.png" height="500px">
+			</section>
+			<section>
+				<h2>Nixietune</h2>
+				<ul>
+					<li>Front-end for SBERT and HF Trainer</li>
+					<li>Stable JSON data format</li>
+				</ul>
+				<pre><code>
+{
+    "seq_len": 128,
+    "target": "triplet",
+    "train_dataset": "nixiesearch/amazon-esci",
+    "eval_dataset": "nixiesearch/amazon-esci",
+    "model_name_or_path": "intfloat/e5-base-v2",
+    "per_device_train_batch_size": 512,
+    "per_device_eval_batch_size": 512,
+    "eval_metrics": ["ndcg@3", "ndcg@5", "ndcg@10"],
+    "query_prefix": "query: ",
+    "document_prefix": "passage: "
+}
+				</code></pre>
+			</section>
+			<section>
+				<h2>Nixietune data format</h2>
+				<p>query + positive + negatives (0+)</p>
+				<pre><code>
+{
+    "query": "tomato",
+    "doc": "Tomato Round Local 1kg",
+    "neg": [
+        "Heinz- Tomato Ketchup | 600 ml",
+        "Jacker Tomato Flavour Potato Crisps | 100g",
+        "Red Potato | 500 g",
+        "Kochur Mukhi | 500 g",
+        "Ahmed Tomato Sauce 340 g - 5000000162"
+    ]
+}
+				</code></pre>
+			</section>
+			<section>
+				<h2>Example code</h2>
+				<img src="img/sbert-example2.png" height="500px">
+			</section>
+			<section>
+				<h2>Base models</h2>
+				<img src="img/sbert-models.png" height="350px">
+				<ul>
+					<li>SBERT pre-trained models</li>
+					<li>Models from MTEB leaderboard</li>
+					<li>Old good bert-base-uncased</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Amazon ESCI: Guinea pig dataset</h2>
+				<img src="img/gp.jpg" height="200px">
+				<p><a href="github.com/amazon-science/esci-data">github.com/amazon-science/esci-data</a></p>
+				<ul>
+					<li>48k queries (29k EN, 9 ES, 10 JP)</li>
+					<li>1.1M relevance labels: <br><strong>E</strong>xact, <strong>S</strong>ubstitute,
+						<strong>C</strong>omplement, <strong>I</strong>rrelevant
+					</li>
+					<li>Not yet leaked to top models in MTEB leaderboard</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Which base model to choose?</h2>
+				<p>Experiment: take flavors of <strong>bert-base-uncased</strong> and fine-tune</p>
+				<p><img src="img/base.png" height="200px"> </p>
+				<p class="fragment"><strong>Learning #1</strong>: pre-trained models are a good starting point</p>
+			</section>
+			<section>
+				<h2>Does size matter?</h2>
+				<!--p><img src="img/size.png" height="200px" style="margin: 0px;"></p-->
+				<p>Experiment: is <strong>small/base/large</strong> size affects NDCG?</p>
+				<p class="fragment"><img src="img/e5.png" height="200px"></p>
+				<p class="fragment"><strong>Learning #2</strong>: the larger - the better</p>
+			</section>
+			<section>
+				<h2>Size vs speed</h2>
+				<p>Experiment: is <strong>small/base/large</strong> slow on CPU?</p>
+				<p class="fragment"><img src="img/latency.webp" height="250px"></p>
+				<p class="fragment"><strong>Learning #3</strong>: the larger - the slower</p><br>
+				<small>[1] - <a href="https://medium.com/nixiesearch/how-to-compute-llm-embeddings-3x-faster-with-model-quantization-25523d9b4ce5">Nixiesearch blog - Faster embeddings with ONNX quantization</a></small>
+			</section>
+			<section>
+				<h2>The loss function</h2>
+				<p></p>
+				<ul>
+					<li>Loss function: metric we optimize for</li>
+				</ul>
+				<p><img src=" img/loss.webp" height="400px" style="margin: 0px;"></p>
+				<ul>
+					<li>"Yeah let's have NDCG as a loss" - it should be <strong>differentiable</strong></li>
+				</ul>
+			</section>
+			<section>
+				<h2>Loss functions</h2>
+				<p>SBERT has 24 losses, which one to choose?</p>
+				<ul>
+					<li><strong>CosineLoss</strong>: query-document-label, float label</li>
+					<li><strong>Contrastive</strong>: query-document-label, binary label</li>
+					<li><strong>TripletLoss</strong>: query-positive-negative</li>
+					<li><strong>MultiNegsRankingLoss</strong>: query-positive</li>
+					<li><strong>MultiNegsRankingLoss*</strong>: query-positive-negatives[]</li>
+				</ul>
+			</section>
+			<section>
+				<h2>CosineSimilarityLoss</h2>
+				<p>Expects query-document-label triplets</p>
+				<img src="img/cosine.png" height="300px">
+			</section>
+			<section>
+				<h2>Target: cosine</h2>
+				<p>Nixietune: set target</p>
+				<pre><code data-trim data-noescape data-line-numbers="3">
+{
+    "seq_len": 128,
+    "target": "cosine",
+    "train_dataset": "nixiesearch/amazon-esci",
+    "eval_dataset": "nixiesearch/amazon-esci",
+    "model_name_or_path": "intfloat/e5-base-v2",
+    "per_device_train_batch_size": 512,
+    "per_device_eval_batch_size": 512,
+    "eval_metrics": ["ndcg@3", "ndcg@5", "ndcg@10"],
+    "query_prefix": "query: ",
+    "document_prefix": "passage: "
+}
+				</code></pre>
+			</section>
+			<section>
+				<h2>Passing scores</h2>
+				<pre><code data-trim data-noescape data-line-numbers="4,12">
+{
+    "query": "tomato",
+    "doc": "Tomato Round Local 1kg",
+    "score": 1.0,
+    "neg": [
+        "Heinz- Tomato Ketchup | 600 ml",
+        "Jacker Tomato Flavour Potato Crisps | 100g",
+        "Red Potato | 500 g",
+        "Kochur Mukhi | 500 g",
+        "Ahmed Tomato Sauce 340 g - 5000000162"
+    ],
+    "negscore": [0.6, 0.4, 0.2, 0.1, 0.0]
+}
+				</code></pre>
+			</section>
+			<section>
+				<h2>CosineSimilarityLoss</h2>
+				<p>But what is label value?</p>
+				<p><img src="img/cos90.png" height="400px" style="margin: 0px;"></p>
+				<ul>
+					<li>Too many orthogonal vectors</li>
+				</ul>
+			</section>
+			<section>
+				<h2>CosineSimilarityLoss</h2>
+				<p>Cosine scores: expectation vs reality</p>
+				<p><img src="img/e5-cos-dist.png" height="350px"></p>
+				<ul>
+					<li>Expected 0.0, got 0.8 = huge error</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Cosine shape depends on training</h2>
+				<p><img src="img/cos-temp.png" height="450px"></p>
+				<ul><strong>Learning #3</strong>: relevance is a spectrum</ul>
+			</section>
+			<section>
+				<h2>Relevance is a spectrum</h2>
+				<p>But what about our training data?</p>
+				<p><img src="img/tomato-e5-cvr.png" height="300px"></p>
+				<ul>
+					<li>Chopped tomatoes 500g</li>
+					<li>Makita Power Drill 2KW - more negative?</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Contrastive and Triplet losses</h2>
+				<ul>
+					<li><strong>Contrastive</strong>: query-document-label, binary label</li>
+					<li><strong>TripletLoss</strong>: query-positive-negative</li>
+				</ul>
+				<p><img src="img/triplet.png" height="200px"></p>
+				<ul>
+					<li>No explicit zero/one labels</li>
+					<li>Push positives close, and negatives far</li>
+				</ul>
+			</section>
+			<section>
+				<h2>ContrastiveLoss</h2>
+				<p><img src="img/contrastive.png" height="550px"></p>
+			</section>
+			<section>
+				<h2>TripletLoss</h2>
+				<p><img src="img/triplet2.png" height="550px"></p>
+			</section>
+			<section>
+				<h2>Batch size</h2>
+				<p><img src="img/batch.png" height="250px"></p>
+				<ul>
+					<li>🤔 Larger batch size = better the NDCG </li>
+					<li>😢 At 1024 we maxed out VRAM </li>
+				</ul>
+			</section>
+			<section>
+				<h2>Let's help Dora find a better way</h2>
+				<p><img src="img/triplet2-dora.png" height="550px"></p>
+			</section>
+			<section>
+				<h2>Let's help Dora find a better way</h2>
+				<p><img src="img/triplet2-dora.png" height="450px"></p>
+				<ul>
+					<li>Hint: how many negatives are there for sample #1?</li>
+				</ul>
+			</section>
+			<section>
+				<h2>More than one: in-batch negatives!</h2>
+				<p><img src="img/triplet-inbatch.png" height="550px"></p>
+			</section>
+			<section>
+				<h2>InfoNCE loss</h2>
+				<p><img src="img/infonce-example.png"></p>
+				<ul>
+					<li>Contrasts query+positive over all in-batch negatives</li>
+					<li>Option: contrast over in-batch positives as negatives</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Target: infonce</h2>
+				<p>Nixietune: set target</p>
+				<pre><code data-trim data-noescape data-line-numbers="3-4">
+{
+    "seq_len": 128,
+    "target": "infonce",
+    "num_negatives": 1,
+    "train_dataset": "nixiesearch/amazon-esci",
+    "eval_dataset": "nixiesearch/amazon-esci",
+    "model_name_or_path": "intfloat/e5-base-v2",
+    "per_device_train_batch_size": 512,
+    "per_device_eval_batch_size": 512,
+    "eval_metrics": ["ndcg@3", "ndcg@5", "ndcg@10"],
+    "query_prefix": "query: ",
+    "document_prefix": "passage: "
+}
+				</code></pre>
+			</section>
+			<section>
+				<h2>InfoNCE vs others</h2>
+				<p><img src="img/losses.png" height="250px"></p>
+				<p>Majority of MTEB leaderboard are trained with InfoNCE loss</p>
+				<ul><strong>Learning #4</strong>: more data = better</ul>
+			</section>
+			<section>
+				<h2>Does this work in practice?</h2>
+			</section>
+	        <section>
+	        	<h2>Case: food search</h2>
+	        	<p>A/B test: Control vs <i>Hybrid for 2+ tokens</i></p>
+	        	<table class="fragment">
+	        		<thead>
+	        			<tr>
+	        				<td><strong>Region</strong></td>
+	        				<td><strong>GMV</strong></td>
+	        				<td><strong>Orders</strong></td>
+	        				<td><strong>Clicks</strong></td>
+	        				<td><strong>Click pos</strong></td>
+	        				<td><strong>ZRR</strong></td>
+	        			</tr>
+	        		</thead>
+	        		<tbody>
+	        			<tr>
+	        				<td>SA</td>
+	        				<td><span style="color: green;">+3.9%</span></td>
+	        				<td><span style="color: green;">+1.6%</span></td>
+	        				<td><span style="color: green;">+4.2%</span></td>
+	        				<td><span style="color: green;">-3.4%</span></td>
+	        				<td>N/A</td>
+	        			</tr>
+	        			<tr>
+	        				<td>UAE</td>
+	        				<td><span style="color: green;">+0.7%</span></td>
+	        				<td><span style="color: green;">+0.7%</span></td>
+	        				<td><span style="color: green;">+2.5%</span></td>
+	        				<td><span style="color: green;">-2.4%</span></td>
+	        				<td><span style="color: green;">-40%</span></td>
+	        			</tr>
+	        			<tr>
+	        				<td>APAC</td>
+	        				<td><span style="color: green;">+1%</span></td>
+	        				<td><span style="color: red;">0%</span></td>
+	        				<td><span style="color: green;">+1.2%</span></td>
+	        				<td><span style="color: green;">-1%</span></td>
+	        				<td><span style="color: green;">-27%</span></td>
+	        			</tr>
+	        			<tr>
+	        				<td>Turkey</td>
+	        				<td><span style="color: green;">+0.6%</span></td>
+	        				<td><span style="color: green;">+0.4%</span></td>
+	        				<td><span style="color: green;">+1.14%</span></td>
+	        				<td><span style="color: red;">0%</span></td>
+	        				<td>N/A</td>
+	        			</tr>
+	        			<tr>
+	        				<td>Latam</td>
+	        				<td><span style="color: red;">0%</span></td>
+	        				<td><span style="color: red;">0%</span></td>
+	        				<td><span style="color: green;">+0.5%</span></td>
+	        				<td><span style="color: red;">0%</span></td>
+	        				<td><span style="color: green;">-12%</span></td>
+	        			</tr>
+	        		</tbody>
+	        	</table>
+	        </section>
+			<section>
+				<h2>Case: electronic parts</h2>
+				<p>Tough case: huge vocab mismatch</p>
+				<p><img src="img/canals.png" height="200px" style="margin: 0px;"></p>
+				<p><img src="img/canals-ft.png" height="200px" style="margin: 0px;"></p>
+				<p>TLDR: NDCG@10 jump from 0.13 to 0.58</p>
+			</section>
+	        <section>
+	        	<h2>Does it work? (yes/no)</h2>
+	        	<p style="margin: 0px;"><img src="img/works.png" height="400px" style="margin: 0px;"></p>
+	        	<ul>
+	        		<li><strong>Depends on baseline</strong>: tough to beat well-built lexical search</li>
+	        		<li><strong>Focus on recall</strong>: use reranking for precision</li>
+	        		<li><strong>Should you fine-tune</strong>: yes</li>
+	        	</ul>
+	        </section>
+			<section>
+				<h2>Final words</h2>
+				<p><img src="img/doge.png" height="300px"></p>
+				<ul>
+					<li>Fine-tuning is easy with SBERT/nixietune</li>
+					<li>FT gains >> swapping models</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Links</h2>
+				<img src="img/qrcode.png">
+				<ul>
+					<li><strong>Nixiesearch</strong>: <a
+							href="https://github.com/nixiesearch/nixiesearch">github.com/nixiesearch/nixiesearch</a>
+					</li>
+					<li><strong>Nixietune</strong>: <a
+							href="https://github.com/nixiesearch/nixietune">github.com/nixiesearch/nixietune</a></li>
+					<li><strong>Linkedin</strong>: <a
+							href="https://www.linkedin.com/in/romangrebennikov/">linkedin.com/in/romangrebennikov/</a>
+					</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Questions?</h2>
+			</section>
+		</div>
+	</div>
+
+	<script src="dist/reveal.js"></script>
+	<script src="plugin/notes/notes.js"></script>
+	<script src="plugin/markdown/markdown.js"></script>
+	<script src="plugin/highlight/highlight.js"></script>
+	<script>
+		// More info about initialization & config:
+		// - https://revealjs.com/initialization/
+		// - https://revealjs.com/config/
+		Reveal.initialize({
+			hash: true,
+			history: true,
+			controls: true,
+			progress: true,
+			width: 1200,
+			transition: 'none',
+			slideNumber: true,
+
+			// Learn about plugins: https://revealjs.com/plugins/
+			plugins: [RevealMarkdown, RevealHighlight, RevealNotes]
+		});
+	</script>
+</body>
+
+</html>
